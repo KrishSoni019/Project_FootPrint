@@ -1,0 +1,1 @@
+// Fetches/marks notifications read

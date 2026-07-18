@@ -1,0 +1,1 @@
+// OLTP domain entity: User
