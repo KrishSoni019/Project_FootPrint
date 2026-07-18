@@ -1,1 +1,0 @@
-// Base application error class

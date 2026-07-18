@@ -1,9 +1,0 @@
-{
-  "name": "project-footprint",
-  "private": true,
-  "workspaces": [
-    "apps/*",
-    "services/*",
-    "packages/*"
-  ]
-}

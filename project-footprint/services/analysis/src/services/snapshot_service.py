@@ -1,1 +1,0 @@
-# Persists versioned score snapshots

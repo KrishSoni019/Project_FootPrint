@@ -1,1 +1,0 @@
-# Verifies queue contract compatibility

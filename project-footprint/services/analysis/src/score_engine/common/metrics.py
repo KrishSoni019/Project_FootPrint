@@ -1,1 +1,0 @@
-# Shared metric calculation helpers
