@@ -5,5 +5,10 @@
     "apps/*",
     "services/*",
     "packages/*"
-  ]
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/frontend",
+    "build": "npm run build --workspace=apps/frontend",
+    "preview": "npm run preview --workspace=apps/frontend"
+  }
 }

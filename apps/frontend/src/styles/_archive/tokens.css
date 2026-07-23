@@ -1,0 +1,92 @@
+/**
+ * tokens.css
+ * ----------------------------------------------------------------------------
+ * Every color, font, spacing, and timing value used anywhere on the landing
+ * page is defined here, once. No component should hardcode a hex value or a
+ * px size directly — it should reference a variable from this file.
+ *
+ * Why this matters: change the brand's accent color in one line here, and it
+ * updates consistently everywhere it's used, instead of hunting through ten
+ * component files.
+ * ----------------------------------------------------------------------------
+ */
+
+:root {
+  /* ---- Color: surfaces ---- */
+  --color-bg: #0a0a0f;              /* Base page background — near-black, not pure black */
+  --color-bg-raised: #111116;       /* Cards, nav bar, anything "above" the base surface */
+  --color-bg-raised-hover: #17171d; /* Hover state for raised surfaces */
+  --color-border: #1e1e26;          /* Subtle hairline borders/dividers */
+  --color-border-strong: #2a2a34;   /* Borders that need slightly more presence */
+
+  /* ---- Color: text ---- */
+  --color-text-primary: #f2f2f5;    /* Headlines, primary content */
+  --color-text-secondary: #9797a6;  /* Supporting copy, subheads */
+  --color-text-muted: #5c5c68;      /* Least-important text (fine print, timestamps) */
+
+  /* ---- Color: brand accents ----
+     Two accents, each with a job:
+     - indigo = the brand itself. Primary actions, links, focus states.
+     - amber  = reserved ONLY for "evidence" moments (the EvidenceTrail feed,
+       highlighted proof). Using it elsewhere would dilute what it signals. */
+  --color-accent-indigo: #6366f1;
+  --color-accent-indigo-hover: #7476f5;
+  --color-accent-indigo-soft: rgba(99, 102, 241, 0.12);
+  --color-accent-amber: #f5a623;
+  --color-accent-amber-soft: rgba(245, 166, 35, 0.12);
+
+  /* ---- Typography ---- */
+  --font-display: "Space Grotesk", "Segoe UI", sans-serif; /* Headlines — geometric, distinctive */
+  --font-body: "Inter", "Segoe UI", sans-serif;             /* Body copy — quiet, readable */
+  --font-mono: "JetBrains Mono", "SFMono-Regular", monospace; /* Evidence/data: timestamps, tags */
+
+  --fs-display-xl: clamp(2.75rem, 5vw + 1rem, 4.5rem);
+  --fs-display-lg: clamp(2rem, 3vw + 1rem, 2.75rem);
+  --fs-display-md: 1.75rem;
+  --fs-body-lg: 1.125rem;
+  --fs-body-md: 1rem;
+  --fs-body-sm: 0.875rem;
+  --fs-mono-sm: 0.8125rem;
+
+  --lh-tight: 1.1;
+  --lh-normal: 1.5;
+  --lh-relaxed: 1.7;
+
+  /* ---- Spacing scale (rem-based, 8px rhythm) ---- */
+  --space-1: 0.5rem;
+  --space-2: 0.75rem;
+  --space-3: 1rem;
+  --space-4: 1.5rem;
+  --space-5: 2rem;
+  --space-6: 3rem;
+  --space-7: 4.5rem;
+  --space-8: 6rem;
+  --space-9: 9rem;
+
+  /* ---- Radius & elevation ---- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --shadow-soft: 0 1px 0 rgba(255, 255, 255, 0.04) inset,
+                 0 8px 24px rgba(0, 0, 0, 0.35);
+
+  /* ---- Motion ---- */
+  --ease-standard: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration-standard: 300ms;
+  --duration-slow: 600ms;
+
+  /* ---- Layout ---- */
+  --content-max-width: 1180px;
+  --content-padding-inline: clamp(1.25rem, 4vw, 3rem);
+}
+
+/* Respect reduced-motion preferences globally */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

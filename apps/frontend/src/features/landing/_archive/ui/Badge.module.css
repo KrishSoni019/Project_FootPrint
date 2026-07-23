@@ -1,0 +1,35 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: var(--fs-mono-sm);
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-secondary);
+}
+
+.code {
+  color: var(--color-accent-indigo-hover);
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.task {
+  color: #63cf9f;
+  border-color: rgba(99, 207, 159, 0.3);
+}
+
+.docs {
+  color: var(--color-accent-amber);
+  border-color: rgba(245, 166, 35, 0.3);
+}
+
+.review {
+  color: #c586f2;
+  border-color: rgba(197, 134, 242, 0.3);
+}
+
+.neutral {
+  color: var(--color-text-secondary);
+}

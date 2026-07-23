@@ -1,0 +1,28 @@
+.section {
+  padding-block: var(--space-9);
+  border-top: 1px solid var(--color-border);
+  background:
+    radial-gradient(500px circle at 50% 100%, rgba(99, 102, 241, 0.08), transparent 70%),
+    var(--color-bg);
+}
+
+.inner {
+  max-width: 640px;
+  margin-inline: auto;
+  padding-inline: var(--content-padding-inline);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-4);
+}
+
+.heading {
+  font-size: var(--fs-display-lg);
+  color: var(--color-text-primary);
+}
+
+.subtext {
+  color: var(--color-text-secondary);
+  font-size: var(--fs-body-lg);
+}
