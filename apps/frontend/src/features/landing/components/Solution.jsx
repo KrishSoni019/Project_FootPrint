@@ -120,13 +120,12 @@ export default function Solution() {
             One trail, three sources.
           </h2>
           <p className="mt-5 max-w-md text-[15.5px] leading-relaxed text-mist-400">
-            Code-only tracking under-represents non-technical work. Task-only
-            tracking misses ad-hoc effort. Self-reported logs alone can&rsquo;t
-            be verified. Combined and cross-checked against each other, the
-            three are far harder to game — or to miss.
-          </p>
-
-          <ul className="mt-8 space-y-5">
+          Code-only tracking overlooks non-technical contributions. Task-only tracking
+          misses spontaneous effort. Self-reported logs provide context but can't stand
+          on their own. When all three are combined and cross-verified, contributions
+          become far more complete, trustworthy, and difficult to manipulate.
+        </p>
+                  <ul className="mt-8 space-y-5">
             {SOURCES.map(({ Icon, tone, title, body }) => (
               <li key={title} className="flex gap-3.5">
                 <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-ink-700 bg-ink-850">

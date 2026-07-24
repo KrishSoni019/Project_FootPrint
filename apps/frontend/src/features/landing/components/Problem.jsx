@@ -7,7 +7,7 @@ const ENTRIES = [
   {
     claim: '"She said she did a lot of the work."',
     reality:
-      "Contribution claims rarely have anything behind them — no record, no way to check.",
+      "Contribution claims rarely have anything behind them .. no record, no way to check.",
     rotate: "-rotate-1",
   },
   {
@@ -19,7 +19,7 @@ const ENTRIES = [
   {
     claim: '"He committed 40 times!"',
     reality:
-      "Ten small edits can outweigh one hard problem solved — frequency isn't difficulty.",
+      "Ten small edits can outweigh one hard problem solved .. frequency isn't difficulty.",
     rotate: "rotate-1",
   },
   {
@@ -47,14 +47,14 @@ export default function Problem() {
             <span className="text-mist-600 line-through decoration-flag-500/70">
               trust
             </span>{" "}
-            memory — not evidence.
+            memory - not evidence.
           </h2>
-          <p className="mt-5 max-w-md text-[15.5px] leading-relaxed text-mist-400">
-            When a deliverable ships, everyone can see the result. Almost no
-            one can see the work that produced it — so contribution gets
-            judged by who talks the most in stand-up, or by a commit graph
-            that only tells part of the story.
-          </p>
+         <p className="mt-5 max-w-md text-[15.5px] leading-relaxed text-mist-400">
+          Every project has visible outcomes, but the work behind them is often
+          invisible. Planning, research, debugging, reviews, and collaboration fade
+          into the background, leaving contributions to be judged by a few commits or
+          the loudest voice in the room.
+        </p>
         </motion.div>
 
         <div className="grid gap-5 sm:grid-cols-2">

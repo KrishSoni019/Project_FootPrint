@@ -149,7 +149,7 @@ function EvidenceConsole() {
               />
             </div>
             <p className="mt-2 font-mono text-[10.5px] uppercase tracking-wide text-mist-500">
-              Code · Collaboration · Non-code — click through to every event
+              Code · Collaboration · Non-code · click through to every event
             </p>
           </motion.div>
         </motion.div>
@@ -225,7 +225,7 @@ export default function Hero() {
             className="mt-6 max-w-lg text-[16.5px] leading-relaxed text-mist-400"
           >
             Footprint turns your team&rsquo;s commits, tasks, and logged work
-            into one contribution record — auditable, explainable, and
+            into one contribution record..auditable, explainable, and
             traceable back to the activity behind it. No more guessing who
             did what.
           </motion.p>
