@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Menu, X, ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const NAV_LINKS = [
   { label: "Product", href: "#solution" },
@@ -53,12 +54,12 @@ export default function Navbar() {
         }`}
       >
         <nav className="mx-auto flex h-16 w-full max-w-[1200px] items-center justify-between px-6 md:px-10">
-          <a href="#top" className="flex items-center gap-2.5">
+          <Link to="/" className="flex items-center gap-2.5">
             <Mark />
             <span className="font-display text-[17px] font-medium tracking-tight text-paper-100">
               Footprint
             </span>
-          </a>
+          </Link>
 
           <div className="hidden items-center gap-8 md:flex">
             {NAV_LINKS.map((link) => (
@@ -73,19 +74,19 @@ export default function Navbar() {
           </div>
 
           <div className="hidden items-center gap-3 md:flex">
-            <a
-              href="#signin"
+            <Link
+              to="/login"
               className="font-mono text-[13px] uppercase tracking-wide text-mist-400 transition-colors hover:text-paper-100"
             >
               Sign in
-            </a>
-            <a
-              href="#cta"
+            </Link>
+            <Link
+              to="/register"
               className="group inline-flex items-center gap-1.5 rounded-full bg-signal-500 px-4 py-2 text-[13px] font-semibold text-ink-950 transition-all hover:bg-signal-400 hover:shadow-glow-amber"
             >
               Get started
               <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-            </a>
+            </Link>
           </div>
 
           <button
@@ -121,16 +122,21 @@ export default function Navbar() {
                 </a>
               ))}
               <div className="mt-2 flex items-center gap-3 px-2 pt-2">
-                <a href="#signin" className="font-mono text-sm text-mist-400">
+                <Link
+                  to="/login"
+                  onClick={() => setOpen(false)}
+                  className="font-mono text-sm text-mist-400"
+                >
                   Sign in
-                </a>
-                <a
-                  href="#cta"
+                </Link>
+                <Link
+                  to="/register"
+                  onClick={() => setOpen(false)}
                   className="inline-flex items-center gap-1.5 rounded-full bg-signal-500 px-4 py-2 text-sm font-semibold text-ink-950"
                 >
                   Get started
                   <ArrowRight className="h-3.5 w-3.5" />
-                </a>
+                </Link>
               </div>
             </div>
           </motion.div>
