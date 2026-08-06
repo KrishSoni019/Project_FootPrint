@@ -10,20 +10,79 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const app = express();
 
-
-app.use(cors());
-app.use(express.json());
-
-
-const PORT = process.env.PORT || 5000;
 // Enable CORS
 app.use(cors());
 
+// Allow Express to read JSON request bodies
+app.use(express.json());
+
+const PORT = process.env.PORT || 5000;
+
+
+// ======================================================
+// VALIDATION SCHEMAS
+// ======================================================
+
+// Registration validation
 const registerSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
+
+// Login validation
+const loginSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(1, "Password is required"),
+});
+
+
+// ======================================================
+// AUTHENTICATION MIDDLEWARE
+// ======================================================
+
+const authenticateToken = (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    // Check whether Authorization header exists
+    // and follows: Bearer <token>
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        message: "Authentication required",
+      });
+    }
+
+    // Extract token from:
+    // Authorization: Bearer <token>
+    const token = authHeader.split(" ")[1];
+
+    // Verify JWT
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET
+    );
+
+    // Store authenticated user's information
+    // on the request object for the next handler
+    req.user = {
+      userId: decoded.userId,
+    };
+
+    // Authentication successful.
+    // Continue to the actual route.
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      message: "Invalid or expired token",
+    });
+  }
+};
+
+
+// ======================================================
+// BASIC ROUTES
+// ======================================================
 
 app.get("/", (req, res) => {
   res.send(" Welcome to Project FootPrint Backend!");
@@ -36,7 +95,12 @@ app.get("/health", (req, res) => {
     version: "1.0.0",
   });
 });
-// Registration
+
+
+// ======================================================
+// REGISTRATION
+// ======================================================
+
 app.post("/api/auth/register", async (req, res) => {
   try {
     const result = registerSchema.safeParse(req.body);
@@ -50,6 +114,7 @@ app.post("/api/auth/register", async (req, res) => {
 
     const { name, email, password } = result.data;
 
+    // Check if a user with this email already exists
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
@@ -60,8 +125,10 @@ app.post("/api/auth/register", async (req, res) => {
       });
     }
 
+    // Hash password before storing it
     const hashedPassword = await bcrypt.hash(password, 12);
 
+    // Create user in PostgreSQL using Prisma
     const user = await prisma.user.create({
       data: {
         name,
@@ -87,15 +154,10 @@ app.post("/api/auth/register", async (req, res) => {
   }
 });
 
-// Login
 
-const loginSchema = z.object({
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(1, "Password is required"),
-});
-
-
-// Loginn Route 
+// ======================================================
+// LOGIN
+// ======================================================
 
 app.post("/api/auth/login", async (req, res) => {
   try {
@@ -110,16 +172,19 @@ app.post("/api/auth/login", async (req, res) => {
 
     const { email, password } = result.data;
 
+    // Find user using email
     const user = await prisma.user.findUnique({
       where: { email },
     });
 
+    // Do not reveal whether the email exists
     if (!user) {
       return res.status(401).json({
         message: "Invalid email or password",
       });
     }
 
+    // Compare entered password with stored hashed password
     const passwordMatches = await bcrypt.compare(
       password,
       user.password
@@ -131,26 +196,26 @@ app.post("/api/auth/login", async (req, res) => {
       });
     }
 
+    // Create JWT
     const token = jwt.sign(
-    {
+      {
         userId: user.id,
-    },
-    process.env.JWT_SECRET,
-    {
+      },
+      process.env.JWT_SECRET,
+      {
         expiresIn: "1h",
-    }
+      }
     );
 
     return res.status(200).json({
-    message: "Login successful",
-    token,
-    user: {
+      message: "Login successful",
+      token,
+      user: {
         id: user.id,
         name: user.name,
         email: user.email,
-    },
+      },
     });
-
   } catch (error) {
     console.error("Login error:", error);
 
@@ -159,6 +224,47 @@ app.post("/api/auth/login", async (req, res) => {
     });
   }
 });
+
+
+// ======================================================
+// GET CURRENT AUTHENTICATED USER
+// ======================================================
+
+app.get("/api/auth/me", authenticateToken, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: {
+        id: req.user.userId,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      user,
+    });
+  } catch (error) {
+    console.error("Get current user error:", error);
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+});
+
+
+// ======================================================
+// START SERVER
+// ======================================================
 
 app.listen(PORT, () => {
   console.log(` Server running on http://localhost:${PORT}`);

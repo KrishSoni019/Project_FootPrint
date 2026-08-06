@@ -2,11 +2,21 @@ import { forwardRef } from 'react';
 
 /**
  * Generic labeled input field.
- * Static/UI-only for now — no validation, no error states wired up yet.
- * `rightSlot` lets PasswordField drop a toggle button inside the input.
+ *
+ * Supports controlled form state through value/onChange
+ * and can also be reused by PasswordField.
  */
 const FormField = forwardRef(function FormField(
-  { id, label, type = 'text', placeholder, autoComplete, rightSlot, ...rest },
+  {
+    id,
+    name,
+    label,
+    type = 'text',
+    placeholder,
+    autoComplete,
+    rightSlot,
+    ...rest
+  },
   ref
 ) {
   return (
@@ -22,7 +32,7 @@ const FormField = forwardRef(function FormField(
         <input
           ref={ref}
           id={id}
-          name={id}
+          name={name || id}
           type={type}
           placeholder={placeholder}
           autoComplete={autoComplete}

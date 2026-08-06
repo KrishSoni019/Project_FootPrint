@@ -10,7 +10,13 @@ const EyeIcon = (props) => (
       strokeLinecap="round"
       strokeLinejoin="round"
     />
-    <circle cx="10" cy="10" r="2.25" stroke="currentColor" strokeWidth="1.5" />
+    <circle
+      cx="10"
+      cy="10"
+      r="2.25"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
   </svg>
 );
 
@@ -28,10 +34,18 @@ const EyeOffIcon = (props) => (
 
 /**
  * Password field with a visibility toggle.
- * Local UI state only — plugging into real form state/validation comes later.
+ *
+ * Forwards form props such as name, value and onChange
+ * to the underlying FormField.
  */
 const PasswordField = forwardRef(function PasswordField(
-  { id, label, placeholder, autoComplete },
+  {
+    id,
+    label,
+    placeholder,
+    autoComplete,
+    ...rest
+  },
   ref
 ) {
   const [visible, setVisible] = useState(false);
@@ -44,6 +58,7 @@ const PasswordField = forwardRef(function PasswordField(
       type={visible ? 'text' : 'password'}
       placeholder={placeholder}
       autoComplete={autoComplete}
+      {...rest}
       rightSlot={
         <button
           type="button"

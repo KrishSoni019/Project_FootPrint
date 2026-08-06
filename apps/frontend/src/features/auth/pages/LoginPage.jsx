@@ -5,20 +5,19 @@ import PasswordField from '../components/PasswordField';
 import GoogleButton from '../components/GoogleButton';
 import AuthDivider from '../components/AuthDivider';
 import TerminalPreview from '../components/TerminalPreview';
+import { setAuthToken } from '../utils/authToken';
 
 /**
- * RegisterPage
+ * LoginPage
  *
- * Handles account registration through:
- * POST /api/auth/register
+ * Handles authentication through:
+ * POST /api/auth/login
  */
-export default function RegisterPage() {
-  
+export default function LoginPage() {
+
   const [formData, setFormData] = useState({
-    name: '',
     email: '',
     password: '',
-    confirmPassword: '',
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -39,17 +38,11 @@ export default function RegisterPage() {
 
     setError('');
     setSuccessMessage('');
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
-
     setIsLoading(true);
 
     try {
       const response = await fetch(
-        'http://localhost:5000/api/auth/register',
+        'http://localhost:5000/api/auth/login',
         {
           method: 'POST',
 
@@ -58,7 +51,6 @@ export default function RegisterPage() {
           },
 
           body: JSON.stringify({
-            name: formData.name,
             email: formData.email,
             password: formData.password,
           }),
@@ -68,21 +60,21 @@ export default function RegisterPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.message || 'Registration failed.');
+        setError(data.message || 'Invalid email or password.');
         return;
       }
 
-      setSuccessMessage('Account created successfully.');
+      setAuthToken(data.token);
+
+      setSuccessMessage(`Welcome back, ${data.user.name}.`);
 
       setFormData({
-        name: '',
         email: '',
         password: '',
-        confirmPassword: '',
       });
 
     } catch (error) {
-      console.error('Registration request failed:', error);
+      console.error('Login request failed:', error);
 
       setError(
         'Unable to connect to the server. Please try again.'
@@ -144,11 +136,11 @@ export default function RegisterPage() {
           </Link>
 
           <h1 className="font-display text-3xl font-medium text-paper-100">
-            Create your account
+            Welcome back
           </h1>
 
           <p className="mt-2 text-sm text-mist-400">
-            Start tracking real contribution, not just commit count.
+            Sign in to see where your team's effort actually went.
           </p>
 
           <form
@@ -156,16 +148,6 @@ export default function RegisterPage() {
             className="mt-8 space-y-5"
             noValidate
           >
-            <FormField
-              id="fullName"
-              name="name"
-              label="Full Name"
-              placeholder="Ada Lovelace"
-              autoComplete="name"
-              value={formData.name}
-              onChange={handleChange}
-            />
-
             <FormField
               id="email"
               name="email"
@@ -177,25 +159,23 @@ export default function RegisterPage() {
               onChange={handleChange}
             />
 
-            <PasswordField
-              id="password"
-              name="password"
-              label="Password"
-              placeholder="At least 8 characters"
-              autoComplete="new-password"
-              value={formData.password}
-              onChange={handleChange}
-            />
+            <div className="space-y-2">
+              <PasswordField
+                id="password"
+                name="password"
+                label="Password"
+                placeholder="Your password"
+                autoComplete="current-password"
+                value={formData.password}
+                onChange={handleChange}
+              />
 
-            <PasswordField
-              id="confirmPassword"
-              name="confirmPassword"
-              label="Confirm Password"
-              placeholder="Re-enter your password"
-              autoComplete="new-password"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-            />
+              <div className="flex justify-end">
+                <span className="cursor-not-allowed text-xs font-medium text-mist-400/60">
+                  Forgot password?
+                </span>
+              </div>
+            </div>
 
             {error && (
               <div
@@ -227,10 +207,10 @@ export default function RegisterPage() {
                     className="h-4 w-4 animate-spin rounded-full border-2 border-ink-950/30 border-t-ink-950"
                   />
 
-                  Creating account…
+                  Signing in…
                 </>
               ) : (
-                'Create Account'
+                'Sign In'
               )}
             </button>
           </form>
@@ -242,12 +222,12 @@ export default function RegisterPage() {
           <GoogleButton />
 
           <p className="mt-8 text-center text-sm text-mist-400">
-            Already have an account?{' '}
+            Don't have an account?{' '}
             <Link
-              to="/login"
+              to="/register"
               className="font-medium text-signal-400 hover:text-signal-500 focus:outline-none focus-visible:underline"
             >
-              Sign In
+              Create Account
             </Link>
           </p>
         </div>
