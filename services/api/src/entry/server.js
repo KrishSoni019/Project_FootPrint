@@ -36,6 +36,12 @@ const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+const projectSchema = z.object({
+  name: z.string().min(2, "Project name must be at least 2 characters"),
+  description: z.string().optional(),
+  deadline: z.string().datetime().optional(),
+});
+
 
 // ======================================================
 // AUTHENTICATION MIDDLEWARE
@@ -261,6 +267,96 @@ app.get("/api/auth/me", authenticateToken, async (req, res) => {
   }
 });
 
+// ======================================================
+// CREATE PROJECT / WORKSPACE
+// ======================================================
+
+app.post("/api/projects", authenticateToken, async (req, res) => {
+  try {
+    const result = projectSchema.safeParse(req.body);
+
+    if (!result.success) {
+      return res.status(400).json({
+        message: "Invalid project data",
+        errors: result.error.issues,
+      });
+    }
+
+    const { name, description, deadline } = result.data;
+    const userId = req.user.userId;
+
+    const project = await prisma.$transaction(async (tx) => {
+      // Create the project
+      const newProject = await tx.project.create({
+        data: {
+          name,
+          description,
+          deadline: deadline ? new Date(deadline) : null,
+          ownerId: userId,
+        },
+      });
+
+      // Creator automatically becomes OWNER
+      await tx.projectMember.create({
+        data: {
+          projectId: newProject.id,
+          userId,
+          role: "OWNER",
+        },
+      });
+
+      return newProject;
+    });
+
+    return res.status(201).json({
+      message: "Project created successfully",
+      project,
+    });
+  } catch (error) {
+    console.error("Create project error:", error);
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+});
+
+// ======================================================
+// GET USER'S PROJECTS / WORKSPACES
+// ======================================================
+
+app.get("/api/projects", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    const memberships = await prisma.projectMember.findMany({
+      where: {
+        userId,
+      },
+      include: {
+        project: true,
+      },
+      orderBy: {
+        joinedAt: "desc",
+      },
+    });
+
+    const projects = memberships.map((membership) => ({
+      ...membership.project,
+      role: membership.role,
+    }));
+
+    return res.status(200).json({
+      projects,
+    });
+  } catch (error) {
+    console.error("Get projects error:", error);
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+});
 
 // ======================================================
 // START SERVER
