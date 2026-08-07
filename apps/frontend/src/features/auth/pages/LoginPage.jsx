@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import FormField from '../components/FormField';
 import PasswordField from '../components/PasswordField';
 import GoogleButton from '../components/GoogleButton';
@@ -14,6 +14,7 @@ import { setAuthToken } from '../utils/authToken';
  * POST /api/auth/login
  */
 export default function LoginPage() {
+  const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -72,6 +73,8 @@ export default function LoginPage() {
         email: '',
         password: '',
       });
+
+      navigate('/dashboard');
 
     } catch (error) {
       console.error('Login request failed:', error);
