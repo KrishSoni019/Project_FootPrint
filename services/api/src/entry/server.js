@@ -42,6 +42,11 @@ const projectSchema = z.object({
   deadline: z.string().datetime().optional(),
 });
 
+// Add-member validation
+const addMemberSchema = z.object({
+  email: z.string().email("Invalid email address"),
+});
+
 
 // ======================================================
 // AUTHENTICATION MIDDLEWARE
@@ -351,6 +356,169 @@ app.get("/api/projects", authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error("Get projects error:", error);
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+});
+
+// ======================================================
+// GET PROJECT MEMBERS
+// ======================================================
+
+app.get("/api/projects/:id/members", authenticateToken, async (req, res) => {
+  try {
+    const projectId = Number(req.params.id);
+
+    if (!Number.isInteger(projectId)) {
+      return res.status(400).json({
+        message: "Invalid project id",
+      });
+    }
+
+    // Requester must belong to this project to see its members
+    const requesterMembership = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: {
+          projectId,
+          userId: req.user.userId,
+        },
+      },
+    });
+
+    if (!requesterMembership) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
+
+    const members = await prisma.projectMember.findMany({
+      where: { projectId },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+      orderBy: { joinedAt: "asc" },
+    });
+
+    return res.status(200).json({
+      members: members.map((member) => ({
+        id: member.id,
+        role: member.role,
+        joinedAt: member.joinedAt,
+        user: member.user,
+      })),
+    });
+  } catch (error) {
+    console.error("Get members error:", error);
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+});
+
+// ======================================================
+// ADD PROJECT MEMBER
+// ======================================================
+
+app.post("/api/projects/:id/members", authenticateToken, async (req, res) => {
+  try {
+    const projectId = Number(req.params.id);
+
+    if (!Number.isInteger(projectId)) {
+      return res.status(400).json({
+        message: "Invalid project id",
+      });
+    }
+
+    const result = addMemberSchema.safeParse(req.body);
+
+    if (!result.success) {
+      return res.status(400).json({
+        message: "Invalid member data",
+        errors: result.error.issues,
+      });
+    }
+
+    const { email } = result.data;
+
+    // Only an existing member can even attempt this, and only an OWNER
+    // is allowed to add someone else.
+    const requesterMembership = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: {
+          projectId,
+          userId: req.user.userId,
+        },
+      },
+    });
+
+    if (!requesterMembership) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
+
+    if (requesterMembership.role !== "OWNER") {
+      return res.status(403).json({
+        message: "Only the workspace owner can add members",
+      });
+    }
+
+    // The person being added must already have a FootPrint account —
+    // there is no separate invitation flow in this version.
+    const invitedUser = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!invitedUser) {
+      return res.status(404).json({
+        message: "No FootPrint account found with that email. They need to register first.",
+      });
+    }
+
+    const existingMembership = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: {
+          projectId,
+          userId: invitedUser.id,
+        },
+      },
+    });
+
+    if (existingMembership) {
+      return res.status(409).json({
+        message: "This person is already a member of the workspace",
+      });
+    }
+
+    const member = await prisma.projectMember.create({
+      data: {
+        projectId,
+        userId: invitedUser.id,
+        role: "MEMBER",
+      },
+      include: {
+        user: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    return res.status(201).json({
+      message: "Member added successfully",
+      member: {
+        id: member.id,
+        role: member.role,
+        joinedAt: member.joinedAt,
+        user: member.user,
+      },
+    });
+  } catch (error) {
+    console.error("Add member error:", error);
 
     return res.status(500).json({
       message: "Internal server error",

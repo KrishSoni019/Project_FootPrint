@@ -30,7 +30,7 @@ const NAV_SECTIONS = [
   },
   {
     label: 'Team',
-    items: [{ label: 'Members', icon: Users }],
+    items: [{ label: 'Members', icon: Users, to: '/members' }],
   },
   {
     label: 'Integrations',
