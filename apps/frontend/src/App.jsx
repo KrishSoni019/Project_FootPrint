@@ -3,10 +3,11 @@ import LandingPage from "./features/landing/pages/LandingPage";
 import RegisterPage from "./features/auth/pages/RegisterPage";
 import LoginPage from "./features/auth/pages/LoginPage";
 import DashboardPage from "./features/dashboard/pages/DashboardPage";
+import CreateWorkspacePage from "./features/workspace/pages/CreateWorkspacePage";
 
 /**
  * App
- * Phase B: auth UI + authenticated dashboard shell wired in.
+ * Phase B: auth UI + authenticated dashboard shell + workspace creation wired in.
  */
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/dashboard" element={<DashboardPage />} />
+      <Route path="/workspace/new" element={<CreateWorkspacePage />} />
     </Routes>
   );
 }
