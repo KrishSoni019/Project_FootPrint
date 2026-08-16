@@ -5,10 +5,11 @@ import LoginPage from "./features/auth/pages/LoginPage";
 import DashboardPage from "./features/dashboard/pages/DashboardPage";
 import CreateWorkspacePage from "./features/workspace/pages/CreateWorkspacePage";
 import MembersPage from "./features/members/pages/MembersPage";
+import TasksPage from "./features/tasks/pages/TasksPage";
 
 /**
  * App
- * Phase B: auth UI + authenticated dashboard shell + workspace creation + members wired in.
+ * Phase C: auth UI + authenticated dashboard shell + workspace creation + members + tasks wired in.
  */
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
       <Route path="/dashboard" element={<DashboardPage />} />
       <Route path="/workspace/new" element={<CreateWorkspacePage />} />
       <Route path="/members" element={<MembersPage />} />
+      <Route path="/tasks" element={<TasksPage />} />
     </Routes>
   );
 }
