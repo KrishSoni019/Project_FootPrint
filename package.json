@@ -12,8 +12,8 @@
     "preview": "npm run preview --workspace=apps/frontend"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.3",
-    "prisma": "^6.19.3",
+    "@prisma/client": "7.9.1",
+    "prisma": "7.9.1",
     "react-router-dom": "^7.18.1"
   }
 }
