@@ -23,7 +23,7 @@ const NAV_SECTIONS = [
   {
     label: 'Work',
     items: [
-      { label: 'Tasks', icon: ListTodo },
+      { label: 'Tasks', icon: ListTodo, to: '/tasks' },
       { label: 'Activity', icon: Activity },
       { label: 'Timeline', icon: GitCommitHorizontal },
     ],
@@ -59,7 +59,7 @@ function getInitials(name) {
 /**
  * DashboardSidebar
  *
- * Only "Dashboard" is a real, working route today — every other module is
+ * Only items with a `to` are real, working routes — every other module is
  * visually present but disabled until its backend exists, so the nav is
  * honest about what the product can currently do.
  */

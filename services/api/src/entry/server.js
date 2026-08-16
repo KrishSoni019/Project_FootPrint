@@ -47,6 +47,27 @@ const addMemberSchema = z.object({
   email: z.string().email("Invalid email address"),
 });
 
+// Task creation validation
+const taskCreateSchema = z.object({
+  title: z.string().min(2, "Task title must be at least 2 characters"),
+  description: z.string().optional(),
+  status: z.enum(["TODO", "IN_PROGRESS", "COMPLETED"]).optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
+  dueDate: z.string().datetime().optional(),
+  assigneeId: z.number().int().positive().optional(),
+});
+
+// Task update validation (all fields optional — PATCH is a partial update)
+const taskUpdateSchema = z.object({
+  title: z.string().min(2, "Task title must be at least 2 characters").optional(),
+  description: z.string().optional(),
+  status: z.enum(["TODO", "IN_PROGRESS", "COMPLETED"]).optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH"]).optional(),
+  dueDate: z.string().datetime().nullable().optional(),
+  // assigneeId can be a positive int (assign) or explicit null (unassign)
+  assigneeId: z.number().int().positive().nullable().optional(),
+});
+
 
 // ======================================================
 // AUTHENTICATION MIDDLEWARE
@@ -519,6 +540,291 @@ app.post("/api/projects/:id/members", authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error("Add member error:", error);
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+});
+
+// ======================================================
+// SHARED TASK HELPERS
+// ======================================================
+
+// Fields we're comfortable sending to the client for an assignee/creator —
+// keeps password hashes and other internal fields out of task responses.
+const taskMemberSelect = {
+  id: true,
+  role: true,
+  user: {
+    select: { id: true, name: true, email: true },
+  },
+};
+
+function serializeTask(task) {
+  return {
+    id: task.id,
+    projectId: task.projectId,
+    title: task.title,
+    description: task.description,
+    status: task.status,
+    priority: task.priority,
+    dueDate: task.dueDate,
+    completedAt: task.completedAt,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+    assignee: task.assignee,
+    createdBy: task.createdBy,
+  };
+}
+
+// ======================================================
+// CREATE TASK
+// ======================================================
+
+app.post("/api/projects/:id/tasks", authenticateToken, async (req, res) => {
+  try {
+    const projectId = Number(req.params.id);
+
+    if (!Number.isInteger(projectId)) {
+      return res.status(400).json({
+        message: "Invalid project id",
+      });
+    }
+
+    const result = taskCreateSchema.safeParse(req.body);
+
+    if (!result.success) {
+      return res.status(400).json({
+        message: "Invalid task data",
+        errors: result.error.issues,
+      });
+    }
+
+    const { title, description, status, priority, dueDate, assigneeId } = result.data;
+
+    // Requester must belong to this project. Their ProjectMember row also
+    // becomes the task's createdById — we never trust a client-supplied
+    // creator, since that would let anyone credit a task to someone else.
+    const requesterMembership = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: {
+          projectId,
+          userId: req.user.userId,
+        },
+      },
+    });
+
+    if (!requesterMembership) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
+
+    // If an assignee was supplied, it must be a ProjectMember of the SAME
+    // project — otherwise a task could end up attributed to someone
+    // outside this workspace entirely.
+    if (assigneeId !== undefined) {
+      const assigneeMembership = await prisma.projectMember.findUnique({
+        where: { id: assigneeId },
+      });
+
+      if (!assigneeMembership || assigneeMembership.projectId !== projectId) {
+        return res.status(400).json({
+          message: "Assignee must be a member of this project",
+        });
+      }
+    }
+
+    const task = await prisma.task.create({
+      data: {
+        projectId,
+        title,
+        description,
+        status: status ?? undefined,
+        priority: priority ?? undefined,
+        dueDate: dueDate ? new Date(dueDate) : undefined,
+        assigneeId: assigneeId ?? undefined,
+        createdById: requesterMembership.id,
+      },
+      include: {
+        assignee: { select: taskMemberSelect },
+        createdBy: { select: taskMemberSelect },
+      },
+    });
+
+    return res.status(201).json({
+      message: "Task created successfully",
+      task: serializeTask(task),
+    });
+  } catch (error) {
+    console.error("Create task error:", error);
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+});
+
+// ======================================================
+// GET PROJECT TASKS
+// ======================================================
+
+app.get("/api/projects/:id/tasks", authenticateToken, async (req, res) => {
+  try {
+    const projectId = Number(req.params.id);
+
+    if (!Number.isInteger(projectId)) {
+      return res.status(400).json({
+        message: "Invalid project id",
+      });
+    }
+
+    const requesterMembership = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: {
+          projectId,
+          userId: req.user.userId,
+        },
+      },
+    });
+
+    if (!requesterMembership) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
+
+    const tasks = await prisma.task.findMany({
+      where: { projectId },
+      include: {
+        assignee: { select: taskMemberSelect },
+        createdBy: { select: taskMemberSelect },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return res.status(200).json({
+      tasks: tasks.map(serializeTask),
+    });
+  } catch (error) {
+    console.error("Get tasks error:", error);
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+});
+
+// ======================================================
+// UPDATE TASK
+// ======================================================
+
+app.patch("/api/tasks/:id", authenticateToken, async (req, res) => {
+  try {
+    const taskId = Number(req.params.id);
+
+    if (!Number.isInteger(taskId)) {
+      return res.status(400).json({
+        message: "Invalid task id",
+      });
+    }
+
+    const result = taskUpdateSchema.safeParse(req.body);
+
+    if (!result.success) {
+      return res.status(400).json({
+        message: "Invalid task data",
+        errors: result.error.issues,
+      });
+    }
+
+    const existingTask = await prisma.task.findUnique({
+      where: { id: taskId },
+    });
+
+    if (!existingTask) {
+      return res.status(404).json({
+        message: "Task not found",
+      });
+    }
+
+    // Requester must belong to the project that owns this task — tasks are
+    // scoped through their project, same as members and the timeline will be.
+    const requesterMembership = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: {
+          projectId: existingTask.projectId,
+          userId: req.user.userId,
+        },
+      },
+    });
+
+    if (!requesterMembership) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
+
+    const { title, description, status, priority, dueDate, assigneeId } = result.data;
+
+    const data = {};
+
+    if (title !== undefined) data.title = title;
+    if (description !== undefined) data.description = description;
+    if (priority !== undefined) data.priority = priority;
+
+    if (dueDate !== undefined) {
+      data.dueDate = dueDate === null ? null : new Date(dueDate);
+    }
+
+    // assigneeId: explicit null unassigns; a number must belong to the
+    // SAME project as the task; omitted means "leave unchanged".
+    if (assigneeId !== undefined) {
+      if (assigneeId === null) {
+        data.assigneeId = null;
+      } else {
+        const assigneeMembership = await prisma.projectMember.findUnique({
+          where: { id: assigneeId },
+        });
+
+        if (!assigneeMembership || assigneeMembership.projectId !== existingTask.projectId) {
+          return res.status(400).json({
+            message: "Assignee must be a member of this project",
+          });
+        }
+
+        data.assigneeId = assigneeId;
+      }
+    }
+
+    // completedAt is derived from the status transition, never accepted
+    // directly from the client — this keeps it as trustworthy evidence.
+    if (status !== undefined) {
+      data.status = status;
+
+      if (status === "COMPLETED" && existingTask.status !== "COMPLETED") {
+        data.completedAt = new Date();
+      } else if (status !== "COMPLETED" && existingTask.status === "COMPLETED") {
+        data.completedAt = null;
+      }
+    }
+
+    const task = await prisma.task.update({
+      where: { id: taskId },
+      data,
+      include: {
+        assignee: { select: taskMemberSelect },
+        createdBy: { select: taskMemberSelect },
+      },
+    });
+
+    return res.status(200).json({
+      message: "Task updated successfully",
+      task: serializeTask(task),
+    });
+  } catch (error) {
+    console.error("Update task error:", error);
 
     return res.status(500).json({
       message: "Internal server error",
