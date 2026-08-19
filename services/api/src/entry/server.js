@@ -77,6 +77,24 @@ const taskUpdateSchema = z.object({
   assigneeId: z.number().int().positive().nullable().optional(),
 });
 
+// Manual activity creation validation
+const activityCreateSchema = z.object({
+  title: z.string().min(2, "Activity title must be at least 2 characters"),
+  description: z.string().min(1, "Description is required"),
+  type: z.enum(["RESEARCH", "DOCUMENTATION", "TESTING", "DESIGN", "MEETING"]),
+  evidenceUrl: z.string().url("Invalid evidence URL").optional(),
+  activityDate: z.string().datetime(),
+});
+
+// Manual activity update validation (all fields optional — PATCH is a partial update)
+const activityUpdateSchema = z.object({
+  title: z.string().min(2, "Activity title must be at least 2 characters").optional(),
+  description: z.string().min(1, "Description is required").optional(),
+  type: z.enum(["RESEARCH", "DOCUMENTATION", "TESTING", "DESIGN", "MEETING"]).optional(),
+  evidenceUrl: z.string().url("Invalid evidence URL").optional(),
+  activityDate: z.string().datetime().optional(),
+});
+
 
 // ======================================================
 // AUTHENTICATION MIDDLEWARE
@@ -834,6 +852,229 @@ app.patch("/api/tasks/:id", authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error("Update task error:", error);
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+});
+
+// ======================================================
+// SHARED MANUAL ACTIVITY HELPERS
+// ======================================================
+
+function serializeActivity(activity) {
+  return {
+    id: activity.id,
+    projectId: activity.projectId,
+    memberId: activity.memberId,
+    type: activity.type,
+    title: activity.title,
+    description: activity.description,
+    evidenceUrl: activity.evidenceUrl,
+    activityDate: activity.activityDate,
+    createdAt: activity.createdAt,
+    updatedAt: activity.updatedAt,
+    member: activity.member,
+  };
+}
+
+// ======================================================
+// CREATE MANUAL ACTIVITY
+// ======================================================
+
+app.post("/api/projects/:id/activities", authenticateToken, async (req, res) => {
+  try {
+    const projectId = Number(req.params.id);
+
+    if (!Number.isInteger(projectId)) {
+      return res.status(400).json({
+        message: "Invalid project id",
+      });
+    }
+
+    const result = activityCreateSchema.safeParse(req.body);
+
+    if (!result.success) {
+      return res.status(400).json({
+        message: "Invalid activity data",
+        errors: result.error.issues,
+      });
+    }
+
+    const { title, description, type, evidenceUrl, activityDate } = result.data;
+
+    // Requester must belong to this project. Their ProjectMember row is the
+    // ONLY source for memberId — a client-supplied memberId would let anyone
+    // log evidence on behalf of a teammate, which defeats the point of the
+    // activity log as trustworthy evidence.
+    const requesterMembership = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: {
+          projectId,
+          userId: req.user.userId,
+        },
+      },
+    });
+
+    if (!requesterMembership) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
+
+    const activity = await prisma.manualActivity.create({
+      data: {
+        projectId,
+        memberId: requesterMembership.id,
+        title,
+        description,
+        type,
+        evidenceUrl: evidenceUrl ?? undefined,
+        activityDate: new Date(activityDate),
+      },
+      include: {
+        member: { select: taskMemberSelect },
+      },
+    });
+
+    return res.status(201).json({
+      message: "Activity logged successfully",
+      activity: serializeActivity(activity),
+    });
+  } catch (error) {
+    console.error("Create activity error:", error);
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+});
+
+// ======================================================
+// GET PROJECT ACTIVITIES
+// ======================================================
+
+app.get("/api/projects/:id/activities", authenticateToken, async (req, res) => {
+  try {
+    const projectId = Number(req.params.id);
+
+    if (!Number.isInteger(projectId)) {
+      return res.status(400).json({
+        message: "Invalid project id",
+      });
+    }
+
+    const requesterMembership = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: {
+          projectId,
+          userId: req.user.userId,
+        },
+      },
+    });
+
+    if (!requesterMembership) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
+
+    const activities = await prisma.manualActivity.findMany({
+      where: { projectId },
+      include: {
+        member: { select: taskMemberSelect },
+      },
+      orderBy: { activityDate: "desc" },
+    });
+
+    return res.status(200).json({
+      activities: activities.map(serializeActivity),
+    });
+  } catch (error) {
+    console.error("Get activities error:", error);
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+});
+
+// ======================================================
+// UPDATE MANUAL ACTIVITY
+// ======================================================
+
+app.patch("/api/activities/:id", authenticateToken, async (req, res) => {
+  try {
+    const activityId = Number(req.params.id);
+
+    if (!Number.isInteger(activityId)) {
+      return res.status(400).json({
+        message: "Invalid activity id",
+      });
+    }
+
+    const result = activityUpdateSchema.safeParse(req.body);
+
+    if (!result.success) {
+      return res.status(400).json({
+        message: "Invalid activity data",
+        errors: result.error.issues,
+      });
+    }
+
+    const existingActivity = await prisma.manualActivity.findUnique({
+      where: { id: activityId },
+    });
+
+    if (!existingActivity) {
+      return res.status(404).json({
+        message: "Activity not found",
+      });
+    }
+
+    // Requester must belong to the project that owns this activity.
+    const requesterMembership = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: {
+          projectId: existingActivity.projectId,
+          userId: req.user.userId,
+        },
+      },
+    });
+
+    if (!requesterMembership) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
+
+    const { title, description, type, evidenceUrl, activityDate } = result.data;
+
+    // Only these fields are ever accepted. projectId and memberId are never
+    // read from the request body, so ownership can't be reassigned via PATCH.
+    const data = {};
+
+    if (title !== undefined) data.title = title;
+    if (description !== undefined) data.description = description;
+    if (type !== undefined) data.type = type;
+    if (evidenceUrl !== undefined) data.evidenceUrl = evidenceUrl;
+    if (activityDate !== undefined) data.activityDate = new Date(activityDate);
+
+    const activity = await prisma.manualActivity.update({
+      where: { id: activityId },
+      data,
+      include: {
+        member: { select: taskMemberSelect },
+      },
+    });
+
+    return res.status(200).json({
+      message: "Activity updated successfully",
+      activity: serializeActivity(activity),
+    });
+  } catch (error) {
+    console.error("Update activity error:", error);
 
     return res.status(500).json({
       message: "Internal server error",

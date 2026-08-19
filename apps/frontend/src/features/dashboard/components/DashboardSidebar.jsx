@@ -24,7 +24,7 @@ const NAV_SECTIONS = [
     label: 'Work',
     items: [
       { label: 'Tasks', icon: ListTodo, to: '/tasks' },
-      { label: 'Activity', icon: Activity },
+      { label: 'Activity', icon: Activity, to: '/activities' },
       { label: 'Timeline', icon: GitCommitHorizontal },
     ],
   },
