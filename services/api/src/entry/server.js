@@ -1083,6 +1083,157 @@ app.patch("/api/activities/:id", authenticateToken, async (req, res) => {
 });
 
 // ======================================================
+// SHARED TIMELINE HELPERS
+// ======================================================
+
+// Phase E normalizes Task and ManualActivity records into one common event
+// shape so a future GitHub source (commits/PRs/issues) can plug into the
+// same timeline without a frontend redesign. No new table — this is a
+// read/projection layer over data that already exists.
+//
+// Only timestamps that are real, recorded facts become events:
+//   - createdAt   -> task creation really happened at this instant
+//   - completedAt -> server-derived on the COMPLETED transition (see the
+//                    task PATCH handler above), never client-set
+// There is deliberately no TASK_UPDATED event: Task has no change-audit
+// trail, and `updatedAt` fires on trivial edits too, so synthesizing an
+// event from it would misrepresent what actually happened.
+
+function serializeTaskCreatedEvent(task) {
+  return {
+    id: `task-${task.id}-created`,
+    source: "TASK",
+    type: "TASK_CREATED",
+    title: task.title,
+    description: task.description,
+    timestamp: task.createdAt,
+    member: task.createdBy,
+  };
+}
+
+function serializeTaskCompletedEvent(task) {
+  return {
+    id: `task-${task.id}-completed`,
+    source: "TASK",
+    type: "TASK_COMPLETED",
+    title: task.title,
+    description: task.description,
+    timestamp: task.completedAt,
+    // The assignee is who actually did the work; fall back to the creator
+    // only for a completed-but-unassigned task, so the event always has a
+    // member attached.
+    member: task.assignee ?? task.createdBy,
+  };
+}
+
+function serializeActivityEvent(activity) {
+  return {
+    id: `activity-${activity.id}`,
+    source: "MANUAL_ACTIVITY",
+    type: activity.type,
+    title: activity.title,
+    description: activity.description,
+    timestamp: activity.activityDate,
+    member: activity.member,
+    evidenceUrl: activity.evidenceUrl,
+  };
+}
+
+// ======================================================
+// GET PROJECT TIMELINE
+// ======================================================
+
+app.get("/api/projects/:id/timeline", authenticateToken, async (req, res) => {
+  try {
+    const projectId = Number(req.params.id);
+
+    if (!Number.isInteger(projectId)) {
+      return res.status(400).json({
+        message: "Invalid project id",
+      });
+    }
+
+    // Same membership check as every other project-scoped route — project
+    // access is never trusted from the client, only derived from the
+    // requester's own ProjectMember row.
+    const requesterMembership = await prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: {
+          projectId,
+          userId: req.user.userId,
+        },
+      },
+    });
+
+    if (!requesterMembership) {
+      return res.status(403).json({
+        message: "You do not have access to this workspace",
+      });
+    }
+
+    // Both evidence sources are independent of each other, so fetch them
+    // in parallel. Each query selects only the fields the timeline needs
+    // (not full serializeTask()/serializeActivity() payloads) and filters
+    // by projectId, which is already indexed on both tables.
+    const [tasks, activities] = await Promise.all([
+      prisma.task.findMany({
+        where: { projectId },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          status: true,
+          createdAt: true,
+          completedAt: true,
+          assignee: { select: taskMemberSelect },
+          createdBy: { select: taskMemberSelect },
+        },
+      }),
+      prisma.manualActivity.findMany({
+        where: { projectId },
+        select: {
+          id: true,
+          type: true,
+          title: true,
+          description: true,
+          evidenceUrl: true,
+          activityDate: true,
+          member: { select: taskMemberSelect },
+        },
+      }),
+    ]);
+
+    const events = [];
+
+    for (const task of tasks) {
+      events.push(serializeTaskCreatedEvent(task));
+
+      if (task.status === "COMPLETED" && task.completedAt) {
+        events.push(serializeTaskCompletedEvent(task));
+      }
+    }
+
+    for (const activity of activities) {
+      events.push(serializeActivityEvent(activity));
+    }
+
+    // Newest -> oldest. A project with neither tasks nor activities falls
+    // through to an empty array, not an error.
+    events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    return res.status(200).json({
+      timeline: events,
+    });
+  } catch (error) {
+    console.error("Get timeline error:", error);
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
+  }
+});
+
+// ======================================================
 // START SERVER
 // ======================================================
 
