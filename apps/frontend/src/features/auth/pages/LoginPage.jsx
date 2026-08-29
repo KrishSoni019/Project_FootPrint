@@ -6,6 +6,7 @@ import GoogleButton from '../components/GoogleButton';
 import AuthDivider from '../components/AuthDivider';
 import TerminalPreview from '../components/TerminalPreview';
 import { setAuthToken } from '../utils/authToken';
+import { useWorkspace } from '../../workspace/context/WorkspaceContext';
 
 /**
  * LoginPage
@@ -15,6 +16,7 @@ import { setAuthToken } from '../utils/authToken';
  */
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { reloadWorkspace } = useWorkspace();
 
   const [formData, setFormData] = useState({
     email: '',
@@ -66,6 +68,11 @@ export default function LoginPage() {
       }
 
       setAuthToken(data.token);
+
+      // Refresh the shared workspace state now that we have a fresh token,
+      // so Dashboard doesn't briefly render with a previous session's (or
+      // no) workspace data before its own load kicks in.
+      await reloadWorkspace();
 
       setSuccessMessage(`Welcome back, ${data.user.name}.`);
 

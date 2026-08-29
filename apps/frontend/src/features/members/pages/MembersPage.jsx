@@ -4,6 +4,7 @@ import { AlertTriangle, RefreshCw, UserPlus } from 'lucide-react';
 import DashboardLayout from '../../../layouts/DashboardLayout';
 import AddMemberModal from '../components/AddMemberModal';
 import { getAuthToken, clearAuthToken } from '../../auth/utils/authToken';
+import { useWorkspace } from '../../workspace/context/WorkspaceContext';
 
 const API_BASE_URL = 'http://localhost:5000';
 
@@ -26,22 +27,33 @@ function formatJoinedDate(dateString) {
 /**
  * MembersPage
  *
- * Same "default to the first project" pattern DashboardPage uses — this
- * app doesn't yet persist a globally-selected workspace across pages, so
- * both pages independently land on projects[0] for now.
+ * Workspace (user, projects, selected project) now comes from the shared
+ * WorkspaceContext. This page only owns member-list-specific state and
+ * reloads it whenever the selected workspace changes.
  *
- * GET /api/projects
  * GET /api/projects/:id/members
  */
 export default function MembersPage() {
   const navigate = useNavigate();
+  const {
+    status: workspaceStatus,
+    user,
+    projects,
+    selectedWorkspace: project,
+    setSelectedWorkspaceId,
+    reloadWorkspace,
+    clearWorkspace,
+  } = useWorkspace();
 
-  const [status, setStatus] = useState('loading'); // 'loading' | 'error' | 'ready'
-  const [user, setUser] = useState(null);
-  const [projects, setProjects] = useState([]);
-  const [project, setProject] = useState(null);
+  const [memberDataStatus, setMemberDataStatus] = useState('loading'); // 'loading' | 'error' | 'ready'
   const [members, setMembers] = useState([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (workspaceStatus !== 'loading' && !getAuthToken()) {
+      navigate('/login');
+    }
+  }, [workspaceStatus, navigate]);
 
   const loadMembers = useCallback(async () => {
     const token = getAuthToken();
@@ -51,74 +63,58 @@ export default function MembersPage() {
       return;
     }
 
-    setStatus('loading');
+    if (!project) {
+      setMembers([]);
+      setMemberDataStatus('ready');
+      return;
+    }
+
+    setMemberDataStatus('loading');
 
     try {
-      const [meResponse, projectsResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${API_BASE_URL}/api/projects`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
+      const membersResponse = await fetch(
+        `${API_BASE_URL}/api/projects/${project.id}/members`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-      if (meResponse.status === 401 || projectsResponse.status === 401) {
+      if (membersResponse.status === 401) {
         clearAuthToken();
+        clearWorkspace();
         navigate('/login');
         return;
       }
 
-      if (!meResponse.ok || !projectsResponse.ok) {
-        throw new Error('Failed to load workspace data.');
+      if (!membersResponse.ok) {
+        throw new Error('Failed to load members.');
       }
 
-      const meData = await meResponse.json();
-      const projectsData = await projectsResponse.json();
-
-      const loadedUser = meData.user ?? meData;
-      const loadedProjects = projectsData.projects ?? [];
-      const activeProject = loadedProjects[0] ?? null;
-
-      setUser(loadedUser);
-      setProjects(loadedProjects);
-      setProject(activeProject);
-
-      if (activeProject) {
-        const membersResponse = await fetch(
-          `${API_BASE_URL}/api/projects/${activeProject.id}/members`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-
-        if (membersResponse.status === 401) {
-          clearAuthToken();
-          navigate('/login');
-          return;
-        }
-
-        if (!membersResponse.ok) {
-          throw new Error('Failed to load members.');
-        }
-
-        const membersData = await membersResponse.json();
-        setMembers(membersData.members ?? []);
-      } else {
-        setMembers([]);
-      }
-
-      setStatus('ready');
+      const membersData = await membersResponse.json();
+      setMembers(membersData.members ?? []);
+      setMemberDataStatus('ready');
     } catch (error) {
       console.error('Failed to load members:', error);
-      setStatus('error');
+      setMemberDataStatus('error');
     }
-  }, [navigate]);
+  }, [navigate, project, clearWorkspace]);
 
+  // Re-fetch members whenever the selected workspace changes (or on first
+  // mount once the workspace context has resolved one).
   useEffect(() => {
-    loadMembers();
-  }, [loadMembers]);
+    if (workspaceStatus === 'ready') {
+      loadMembers();
+    }
+  }, [workspaceStatus, project?.id, loadMembers]);
+
+  const status =
+    workspaceStatus === 'error' || memberDataStatus === 'error'
+      ? 'error'
+      : workspaceStatus === 'loading' || memberDataStatus === 'loading'
+        ? 'loading'
+        : 'ready';
 
   const handleLogout = () => {
     clearAuthToken();
+    clearWorkspace();
     navigate('/login');
   };
 
@@ -156,7 +152,7 @@ export default function MembersPage() {
           </p>
           <button
             type="button"
-            onClick={loadMembers}
+            onClick={workspaceStatus === 'error' ? reloadWorkspace : loadMembers}
             className="mt-6 inline-flex items-center gap-2 rounded-lg border border-ink-700 bg-ink-900/60 px-4 py-2 text-sm font-medium text-paper-100 transition-colors hover:bg-ink-800"
           >
             <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
@@ -172,7 +168,7 @@ export default function MembersPage() {
       user={user}
       projects={projects}
       activeProject={project}
-      onSelectProject={() => {}}
+      onSelectProject={setSelectedWorkspaceId}
       onLogout={handleLogout}
     >
       {!project ? (

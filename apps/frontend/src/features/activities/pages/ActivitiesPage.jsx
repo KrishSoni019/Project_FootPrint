@@ -5,15 +5,16 @@ import DashboardLayout from '../../../layouts/DashboardLayout';
 import ActivityList from '../components/ActivityList';
 import CreateActivityModal from '../components/CreateActivityModal';
 import { getAuthToken, clearAuthToken } from '../../auth/utils/authToken';
+import { useWorkspace } from '../../workspace/context/WorkspaceContext';
 
 const API_BASE_URL = 'http://localhost:5000';
 
 /**
  * ActivitiesPage
  *
- * Same "default to the first project" pattern as TasksPage/MembersPage —
- * the app doesn't persist a globally-selected workspace yet, so this lands
- * on projects[0] for now.
+ * Workspace (user, projects, selected project) now comes from the shared
+ * WorkspaceContext. This page only owns activity-log-specific state and
+ * reloads it whenever the selected workspace changes.
  *
  * GET  /api/projects/:id/activities
  * POST /api/projects/:id/activities (via CreateActivityModal, create mode)
@@ -21,15 +22,27 @@ const API_BASE_URL = 'http://localhost:5000';
  */
 export default function ActivitiesPage() {
   const navigate = useNavigate();
+  const {
+    status: workspaceStatus,
+    user,
+    projects,
+    selectedWorkspace: project,
+    setSelectedWorkspaceId,
+    reloadWorkspace,
+    clearWorkspace,
+  } = useWorkspace();
 
-  const [status, setStatus] = useState('loading'); // 'loading' | 'error' | 'ready'
-  const [user, setUser] = useState(null);
-  const [projects, setProjects] = useState([]);
-  const [project, setProject] = useState(null);
+  const [activityDataStatus, setActivityDataStatus] = useState('loading'); // 'loading' | 'error' | 'ready'
   const [activities, setActivities] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState(null);
   const [actionError, setActionError] = useState('');
+
+  useEffect(() => {
+    if (workspaceStatus !== 'loading' && !getAuthToken()) {
+      navigate('/login');
+    }
+  }, [workspaceStatus, navigate]);
 
   const loadActivities = useCallback(async () => {
     const token = getAuthToken();
@@ -39,75 +52,59 @@ export default function ActivitiesPage() {
       return;
     }
 
-    setStatus('loading');
+    if (!project) {
+      setActivities([]);
+      setActivityDataStatus('ready');
+      return;
+    }
+
+    setActivityDataStatus('loading');
     setActionError('');
 
     try {
-      const [meResponse, projectsResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${API_BASE_URL}/api/projects`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
+      const activitiesResponse = await fetch(
+        `${API_BASE_URL}/api/projects/${project.id}/activities`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-      if (meResponse.status === 401 || projectsResponse.status === 401) {
+      if (activitiesResponse.status === 401) {
         clearAuthToken();
+        clearWorkspace();
         navigate('/login');
         return;
       }
 
-      if (!meResponse.ok || !projectsResponse.ok) {
-        throw new Error('Failed to load workspace data.');
+      if (!activitiesResponse.ok) {
+        throw new Error('Failed to load activities.');
       }
 
-      const meData = await meResponse.json();
-      const projectsData = await projectsResponse.json();
-
-      const loadedUser = meData.user ?? meData;
-      const loadedProjects = projectsData.projects ?? [];
-      const activeProject = loadedProjects[0] ?? null;
-
-      setUser(loadedUser);
-      setProjects(loadedProjects);
-      setProject(activeProject);
-
-      if (activeProject) {
-        const activitiesResponse = await fetch(
-          `${API_BASE_URL}/api/projects/${activeProject.id}/activities`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-
-        if (activitiesResponse.status === 401) {
-          clearAuthToken();
-          navigate('/login');
-          return;
-        }
-
-        if (!activitiesResponse.ok) {
-          throw new Error('Failed to load activities.');
-        }
-
-        const activitiesData = await activitiesResponse.json();
-        setActivities(activitiesData.activities ?? []);
-      } else {
-        setActivities([]);
-      }
-
-      setStatus('ready');
+      const activitiesData = await activitiesResponse.json();
+      setActivities(activitiesData.activities ?? []);
+      setActivityDataStatus('ready');
     } catch (error) {
       console.error('Failed to load activities:', error);
-      setStatus('error');
+      setActivityDataStatus('error');
     }
-  }, [navigate]);
+  }, [navigate, project, clearWorkspace]);
 
+  // Re-fetch activities whenever the selected workspace changes (or on
+  // first mount once the workspace context has resolved one).
   useEffect(() => {
-    loadActivities();
-  }, [loadActivities]);
+    if (workspaceStatus === 'ready') {
+      loadActivities();
+    }
+  }, [workspaceStatus, project?.id, loadActivities]);
+
+  const status =
+    workspaceStatus === 'error' || activityDataStatus === 'error'
+      ? 'error'
+      : workspaceStatus === 'loading' || activityDataStatus === 'loading'
+        ? 'loading'
+        : 'ready';
 
   const handleLogout = () => {
     clearAuthToken();
+    clearWorkspace();
     navigate('/login');
   };
 
@@ -166,7 +163,7 @@ export default function ActivitiesPage() {
           </p>
           <button
             type="button"
-            onClick={loadActivities}
+            onClick={workspaceStatus === 'error' ? reloadWorkspace : loadActivities}
             className="mt-6 inline-flex items-center gap-2 rounded-lg border border-ink-700 bg-ink-900/60 px-4 py-2 text-sm font-medium text-paper-100 transition-colors hover:bg-ink-800"
           >
             <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
@@ -182,7 +179,7 @@ export default function ActivitiesPage() {
       user={user}
       projects={projects}
       activeProject={project}
-      onSelectProject={() => {}}
+      onSelectProject={setSelectedWorkspaceId}
       onLogout={handleLogout}
     >
       {!project ? (

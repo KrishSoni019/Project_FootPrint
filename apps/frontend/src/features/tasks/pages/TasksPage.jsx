@@ -5,35 +5,48 @@ import DashboardLayout from '../../../layouts/DashboardLayout';
 import TaskBoard from '../components/TaskBoard';
 import CreateTaskModal from '../components/CreateTaskModal';
 import { getAuthToken, clearAuthToken } from '../../auth/utils/authToken';
+import { useWorkspace } from '../../workspace/context/WorkspaceContext';
 
 const API_BASE_URL = 'http://localhost:5000';
 
 /**
  * TasksPage
  *
- * Same "default to the first project" pattern as MembersPage/DashboardPage —
- * this app doesn't persist a globally-selected workspace yet, so every page
- * independently lands on projects[0] for now.
+ * Workspace (user, projects, selected project) now comes from the shared
+ * WorkspaceContext. This page only owns task-board-specific state — the
+ * member list (for the assignee dropdown) and the tasks themselves — and
+ * reloads both whenever the selected workspace changes.
  *
- * GET /api/projects
  * GET /api/projects/:id/members  (needed for the assignee dropdown)
  * GET /api/projects/:id/tasks
  * PATCH /api/tasks/:id
  */
 export default function TasksPage() {
   const navigate = useNavigate();
+  const {
+    status: workspaceStatus,
+    user,
+    projects,
+    selectedWorkspace: project,
+    setSelectedWorkspaceId,
+    reloadWorkspace,
+    clearWorkspace,
+  } = useWorkspace();
 
-  const [status, setStatus] = useState('loading'); // 'loading' | 'error' | 'ready'
-  const [user, setUser] = useState(null);
-  const [projects, setProjects] = useState([]);
-  const [project, setProject] = useState(null);
+  const [taskDataStatus, setTaskDataStatus] = useState('loading'); // 'loading' | 'error' | 'ready'
   const [members, setMembers] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [updatingTaskId, setUpdatingTaskId] = useState(null);
   const [actionError, setActionError] = useState('');
 
-  const loadTasks = useCallback(async () => {
+  useEffect(() => {
+    if (workspaceStatus !== 'loading' && !getAuthToken()) {
+      navigate('/login');
+    }
+  }, [workspaceStatus, navigate]);
+
+  const loadTaskData = useCallback(async () => {
     const token = getAuthToken();
 
     if (!token) {
@@ -41,83 +54,67 @@ export default function TasksPage() {
       return;
     }
 
-    setStatus('loading');
+    if (!project) {
+      setMembers([]);
+      setTasks([]);
+      setTaskDataStatus('ready');
+      return;
+    }
+
+    setTaskDataStatus('loading');
     setActionError('');
 
     try {
-      const [meResponse, projectsResponse] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/auth/me`, {
+      const [membersResponse, tasksResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/projects/${project.id}/members`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        fetch(`${API_BASE_URL}/api/projects`, {
+        fetch(`${API_BASE_URL}/api/projects/${project.id}/tasks`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
 
-      if (meResponse.status === 401 || projectsResponse.status === 401) {
+      if (membersResponse.status === 401 || tasksResponse.status === 401) {
         clearAuthToken();
+        clearWorkspace();
         navigate('/login');
         return;
       }
 
-      if (!meResponse.ok || !projectsResponse.ok) {
-        throw new Error('Failed to load workspace data.');
+      if (!membersResponse.ok || !tasksResponse.ok) {
+        throw new Error('Failed to load tasks.');
       }
 
-      const meData = await meResponse.json();
-      const projectsData = await projectsResponse.json();
+      const membersData = await membersResponse.json();
+      const tasksData = await tasksResponse.json();
 
-      const loadedUser = meData.user ?? meData;
-      const loadedProjects = projectsData.projects ?? [];
-      const activeProject = loadedProjects[0] ?? null;
-
-      setUser(loadedUser);
-      setProjects(loadedProjects);
-      setProject(activeProject);
-
-      if (activeProject) {
-        const [membersResponse, tasksResponse] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/projects/${activeProject.id}/members`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${API_BASE_URL}/api/projects/${activeProject.id}/tasks`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-        ]);
-
-        if (membersResponse.status === 401 || tasksResponse.status === 401) {
-          clearAuthToken();
-          navigate('/login');
-          return;
-        }
-
-        if (!membersResponse.ok || !tasksResponse.ok) {
-          throw new Error('Failed to load tasks.');
-        }
-
-        const membersData = await membersResponse.json();
-        const tasksData = await tasksResponse.json();
-
-        setMembers(membersData.members ?? []);
-        setTasks(tasksData.tasks ?? []);
-      } else {
-        setMembers([]);
-        setTasks([]);
-      }
-
-      setStatus('ready');
+      setMembers(membersData.members ?? []);
+      setTasks(tasksData.tasks ?? []);
+      setTaskDataStatus('ready');
     } catch (error) {
       console.error('Failed to load tasks:', error);
-      setStatus('error');
+      setTaskDataStatus('error');
     }
-  }, [navigate]);
+  }, [navigate, project, clearWorkspace]);
 
+  // Re-fetch task-board data whenever the selected workspace changes (or on
+  // first mount once the workspace context has resolved one).
   useEffect(() => {
-    loadTasks();
-  }, [loadTasks]);
+    if (workspaceStatus === 'ready') {
+      loadTaskData();
+    }
+  }, [workspaceStatus, project?.id, loadTaskData]);
+
+  const status =
+    workspaceStatus === 'error' || taskDataStatus === 'error'
+      ? 'error'
+      : workspaceStatus === 'loading' || taskDataStatus === 'loading'
+        ? 'loading'
+        : 'ready';
 
   const handleLogout = () => {
     clearAuthToken();
+    clearWorkspace();
     navigate('/login');
   };
 
@@ -155,6 +152,7 @@ export default function TasksPage() {
 
       if (response.status === 401) {
         clearAuthToken();
+        clearWorkspace();
         navigate('/login');
         return;
       }
@@ -208,7 +206,7 @@ export default function TasksPage() {
           </p>
           <button
             type="button"
-            onClick={loadTasks}
+            onClick={workspaceStatus === 'error' ? reloadWorkspace : loadTaskData}
             className="mt-6 inline-flex items-center gap-2 rounded-lg border border-ink-700 bg-ink-900/60 px-4 py-2 text-sm font-medium text-paper-100 transition-colors hover:bg-ink-800"
           >
             <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
@@ -224,7 +222,7 @@ export default function TasksPage() {
       user={user}
       projects={projects}
       activeProject={project}
-      onSelectProject={() => {}}
+      onSelectProject={setSelectedWorkspaceId}
       onLogout={handleLogout}
     >
       {!project ? (

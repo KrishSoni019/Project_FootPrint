@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { getAuthToken, clearAuthToken } from '../../auth/utils/authToken';
+import { useWorkspace } from '../context/WorkspaceContext';
 
 const API_BASE_URL = 'http://localhost:5000';
 
@@ -21,6 +22,7 @@ const labelClasses =
  */
 export default function CreateWorkspacePage() {
   const navigate = useNavigate();
+  const { reloadWorkspace, setSelectedWorkspaceId } = useWorkspace();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -113,6 +115,16 @@ export default function CreateWorkspacePage() {
           data.message || data.error || 'Could not create the workspace. Please try again.'
         );
         return;
+      }
+
+      // Refresh the shared workspace list, then explicitly select the
+      // workspace that was just created. GET /api/projects orders by
+      // joinedAt desc, so the reload alone would already land here — but
+      // the explicit select keeps that behavior correct on purpose rather
+      // than by coincidence of ordering.
+      await reloadWorkspace();
+      if (data.project?.id) {
+        setSelectedWorkspaceId(data.project.id);
       }
 
       navigate('/dashboard');
